@@ -14,6 +14,7 @@
 #include "decompress.h"
 #include "dynamic_placeholder_text_util.h"
 #include "event_data.h"
+#include "ev_iv_display_screen.h"
 #include "gpu_regs.h"
 #include "graphics.h"
 #include "international_string_util.h"
@@ -1542,6 +1543,13 @@ static void Task_HandleInput(u8 taskId)
                     SwitchToMoveSelection(taskId);
                 }
             }
+            else if (FlagGet(FLAG_EV_IV))
+            {
+                //StopPokemonAnimations();
+                PlaySE(SE_RG_CARD_OPEN);
+                BeginNormalPaletteFade(PALETTES_ALL, 0, 0, 16, RGB_BLACK);
+                gTasks[taskId].func = CloseSummaryScreen_AndCallEvIv;
+            }
         }
         else if (JOY_NEW(B_BUTTON))
         {
@@ -2851,6 +2859,8 @@ static void PrintPageNamesAndStats(void)
 static void PutPageWindowTilemaps(u8 page)
 {
     u8 i;
+    int stringXPos;
+    int iconXPos;
 
     ClearWindowTilemap(PSS_LABEL_WINDOW_POKEMON_INFO_TITLE);
     ClearWindowTilemap(PSS_LABEL_WINDOW_POKEMON_SKILLS_TITLE);
@@ -2860,6 +2870,16 @@ static void PutPageWindowTilemaps(u8 page)
     switch (page)
     {
     case PSS_PAGE_INFO:
+        if (FlagGet(FLAG_EV_IV))
+        {
+            FillWindowPixelBuffer(PSS_LABEL_WINDOW_PROMPT_CANCEL, PIXEL_FILL(0));
+            stringXPos = GetStringRightAlignXOffset(FONT_NORMAL, gText_Cancel2, 62);
+            iconXPos = stringXPos - 16;
+            if (iconXPos < 0)
+                iconXPos = 0;
+            PrintAOrBButtonIcon(PSS_LABEL_WINDOW_PROMPT_CANCEL, FALSE, iconXPos);
+            PrintTextOnWindow(PSS_LABEL_WINDOW_PROMPT_CANCEL, gText_Cancel2, stringXPos, 1, 0, 0);
+        }
         PutWindowTilemap(PSS_LABEL_WINDOW_POKEMON_INFO_TITLE);
         PutWindowTilemap(PSS_LABEL_WINDOW_PROMPT_CANCEL);
         if (InBattleFactory() == TRUE || InSlateportBattleTent() == TRUE)
@@ -2867,6 +2887,17 @@ static void PutPageWindowTilemaps(u8 page)
         PutWindowTilemap(PSS_LABEL_WINDOW_POKEMON_INFO_TYPE);
         break;
     case PSS_PAGE_SKILLS:
+        if (FlagGet(FLAG_EV_IV))
+        {
+            FillWindowPixelBuffer(PSS_LABEL_WINDOW_PROMPT_CANCEL, PIXEL_FILL(0));
+            stringXPos = GetStringRightAlignXOffset(FONT_NORMAL, gText_PokeSum_EvIv, 62);
+            iconXPos = stringXPos - 16;
+            if (iconXPos < 0)
+                iconXPos = 0;
+            PrintAOrBButtonIcon(PSS_LABEL_WINDOW_PROMPT_CANCEL, FALSE, iconXPos);
+            PrintTextOnWindow(PSS_LABEL_WINDOW_PROMPT_CANCEL, gText_PokeSum_EvIv, stringXPos, 1, 0, 0);
+            PutWindowTilemap(PSS_LABEL_WINDOW_PROMPT_CANCEL);
+        }
         PutWindowTilemap(PSS_LABEL_WINDOW_POKEMON_SKILLS_TITLE);
         PutWindowTilemap(PSS_LABEL_WINDOW_POKEMON_SKILLS_STATS_LEFT);
         PutWindowTilemap(PSS_LABEL_WINDOW_POKEMON_SKILLS_STATS_RIGHT);
@@ -2917,6 +2948,9 @@ static void ClearPageWindowTilemaps(u8 page)
         ClearWindowTilemap(PSS_LABEL_WINDOW_POKEMON_INFO_TYPE);
         break;
     case PSS_PAGE_SKILLS:
+        if (FlagGet(FLAG_EV_IV))
+            ClearWindowTilemap(PSS_LABEL_WINDOW_PROMPT_CANCEL);
+
         ClearWindowTilemap(PSS_LABEL_WINDOW_POKEMON_SKILLS_STATS_LEFT);
         ClearWindowTilemap(PSS_LABEL_WINDOW_POKEMON_SKILLS_STATS_RIGHT);
         ClearWindowTilemap(PSS_LABEL_WINDOW_POKEMON_SKILLS_EXP);
@@ -4145,4 +4179,35 @@ static void KeepMoveSelectorVisible(u8 firstSpriteId)
         gSprites[spriteIds[i]].data[1] = 0;
         gSprites[spriteIds[i]].invisible = FALSE;
     }
+}
+
+void CloseSummaryScreen_AndCallEvIv(u8 taskId)
+{
+    if (MenuHelpers_ShouldWaitForLinkRecv() != TRUE && !gPaletteFade.active)
+    {
+        FreeAllWindowBuffers();
+        SetMainCallback2(CB2_ShowEvIv_SummaryScreen);
+        DestroyTask(taskId);
+    }
+}
+
+void CB2_ShowEvIv_SummaryScreen(void)
+{
+    if (!gPaletteFade.active)
+        Show_EvIv(sMonSummaryScreen->monList.mons,
+                sMonSummaryScreen->curMonIndex,
+                sMonSummaryScreen->maxMonIndex,
+                sMonSummaryScreen->callback,
+                sMonSummaryScreen->isBoxMon,
+                TRUE);
+}
+
+void EvIv_SummaryScreen_Callback(u8 cursorPos)
+{
+    sMonSummaryScreen->curMonIndex = cursorPos;
+    sMonSummaryScreen->minPageIndex = 0;
+    sMonSummaryScreen->maxPageIndex = PSS_PAGE_COUNT - 1;
+    sMonSummaryScreen->currPageIndex = sMonSummaryScreen->minPageIndex;
+
+    SetMainCallback2(CB2_InitSummaryScreen);
 }
